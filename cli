@@ -1,0 +1,26 @@
+# mysql client
+.mysql(){
+	docker exec -it mysql mysql -h mysql -u root
+}
+
+# postgres client
+.psql(){
+	docker exec -it -e PGPASSWORD=postgres postgres psql -h postgres -U postgres
+}
+
+# cassandra client
+.cqlsh(){
+	docker exec -it cassandra cqlsh cassandra
+}
+
+# redis client
+.redis-cli(){
+	docker exec -it redis redis-cli -h redis
+}
+
+bootstrap(){
+	cur_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+	cd $cur_dir
+	./bootstrap "$@"
+	cd -
+}

@@ -1,0 +1,20 @@
+#! /bin/bash
+
+cur_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# writing command line tools
+FILE=~/.bash_profile
+LINE="source ${cur_dir}/cli"
+grep -qF "$LINE" "$FILE" || echo "$LINE" >> "$FILE"
+
+# edit /etc/hosts
+FILE=/etc/hosts
+LINE="127.0.0.1    nsqd"
+if ! grep -qF "$LINE" "$FILE"; then
+	sudo sh -c "echo '$LINE' >> $FILE"
+fi
+
+export data=${cur_dir}/data
+mkdir -p ${data}
+
+docker-compose "$@"

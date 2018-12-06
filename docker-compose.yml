@@ -1,0 +1,114 @@
+version: '3'
+
+services:
+  dynamo:
+    image: amazon/dynamodb-local:1.11.119
+    container_name: dynamo
+    restart: always
+    ports:
+      - '8000:8000'
+    volumes:
+      - '${data}/dynamo:/var/dynamo'
+    command: -jar DynamoDBLocal.jar -dbPath /var/dynamo -sharedDb -port 8000
+  mysql:
+    image: mysql:8.0.13
+    container_name: mysql
+    restart: always
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - '3306:3306'
+    volumes:
+      - '${data}/mysql:/var/lib/mysql'
+  postgres:
+    image: postgres:11.1
+    container_name: postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - '${data}/postgres:/var/lib/postgresql/data'
+  nsqlookupd:
+    image: nsqio/nsq:v1.1.0
+    container_name: nsqlookupd
+    restart: always
+    ports:
+      - '4161:4161'
+    volumes:
+      - '${data}/nsqlookupd:/var/nsq'
+    command: nsqlookupd -http-address=0.0.0.0:4161
+  nsqd:
+    image: nsqio/nsq:v1.1.0
+    container_name: nsqd
+    restart: always
+    links:
+      - nsqlookupd
+    ports:
+      - '4151:4151'
+      - '4150:4150'
+    volumes:
+      - '${data}/nsqd:/var/nsq'
+    command: nsqd -lookupd-tcp-address=nsqlookupd:4160 -http-address=0.0.0.0:4151 -tcp-address=0.0.0.0:4150 -node-id=1 -data-path=/var/nsq -broadcast-address=nsqd
+  nsqadmin:
+    image: nsqio/nsq:v1.1.0
+    container_name: nsqadmin
+    restart: always
+    links:
+      - nsqlookupd
+      - nsqd
+    ports:
+      - '4171:4171'
+    volumes:
+      - '${data}/nsqadmin:/var/nsq'
+    command: nsqadmin -lookupd-http-address=nsqlookupd:4161 -http-address=0.0.0.0:4171
+  elasticsearch:
+    image: elasticsearch:6.5.1
+    container_name: elasticsearch
+    restart: always
+    environment:
+      - discovery.type=single-node
+    ports:
+      - '9200:9200'
+    volumes:
+      - '${data}/elasticsearch:/usr/share/elasticsearch/data'
+  cassandra:
+    image: cassandra:3.11.3
+    container_name: cassandra
+    restart: always
+    ports:
+      - '9042:9042'
+    volumes:
+      - '${data}/cassandra:/var/lib/cassandra'
+  redis:
+    image: redis:5.0.2
+    container_name: redis
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - '${data}/redis:/data'
+  consul:
+    image: consul:1.4.0
+    container_name: consul
+    restart: always
+    ports:
+      - '8500:8500'
+    volumes:
+      - '${data}/consul:/consul/data'
+  # these group services together
+  all:
+    image: ubuntu:16.04
+    container_name: all
+    restart: 'no'
+    depends_on:
+      - dynamo
+      - mysql
+      - postgres
+      - nsqadmin
+      - elasticsearch
+      - cassandra
+      - redis
+      - consul
