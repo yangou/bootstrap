@@ -6,7 +6,7 @@ services:
     container_name: dynamo
     restart: always
     ports:
-      - '8000:8000'
+      - 8000:8000
     volumes:
       - '${data}/dynamo:/var/dynamo'
     command: -jar DynamoDBLocal.jar -dbPath /var/dynamo -sharedDb -port 8000
@@ -17,7 +17,7 @@ services:
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
     ports:
-      - '3306:3306'
+      - 3306:3306
     volumes:
       - '${data}/mysql:/var/lib/mysql'
   postgres:
@@ -28,7 +28,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     ports:
-      - '5432:5432'
+      - 5432:5432
     volumes:
       - '${data}/postgres:/var/lib/postgresql/data'
   nsqlookupd:
@@ -36,7 +36,7 @@ services:
     container_name: nsqlookupd
     restart: always
     ports:
-      - '4161:4161'
+      - 4161:4161
     volumes:
       - '${data}/nsqlookupd:/var/nsq'
     command: nsqlookupd -http-address=0.0.0.0:4161
@@ -47,8 +47,8 @@ services:
     links:
       - nsqlookupd
     ports:
-      - '4151:4151'
-      - '4150:4150'
+      - 4151:4151
+      - 4150:4150
     volumes:
       - '${data}/nsqd:/var/nsq'
     command: nsqd -lookupd-tcp-address=nsqlookupd:4160 -http-address=0.0.0.0:4151 -tcp-address=0.0.0.0:4150 -node-id=1 -data-path=/var/nsq -broadcast-address=nsqd
@@ -60,7 +60,7 @@ services:
       - nsqlookupd
       - nsqd
     ports:
-      - '4171:4171'
+      - 4171:4171
     volumes:
       - '${data}/nsqadmin:/var/nsq'
     command: nsqadmin -lookupd-http-address=nsqlookupd:4161 -http-address=0.0.0.0:4171
@@ -71,7 +71,7 @@ services:
     environment:
       - discovery.type=single-node
     ports:
-      - '9200:9200'
+      - 9200:9200
     volumes:
       - '${data}/elasticsearch:/usr/share/elasticsearch/data'
   cassandra:
@@ -79,7 +79,7 @@ services:
     container_name: cassandra
     restart: always
     ports:
-      - '9042:9042'
+      - 9042:9042
     volumes:
       - '${data}/cassandra:/var/lib/cassandra'
   redis:
@@ -87,7 +87,7 @@ services:
     container_name: redis
     restart: always
     ports:
-      - '6379:6379'
+      - 6379:6379
     volumes:
       - '${data}/redis:/data'
   consul:
@@ -95,20 +95,91 @@ services:
     container_name: consul
     restart: always
     ports:
-      - '8500:8500'
+      - 8500:8500
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.0.1
+    container_name: zookeeper
+    restart: always
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+    ports:
+      - 2181:2181
     volumes:
-      - '${data}/consul:/consul/data'
-  # these group services together
-  all:
-    image: ubuntu:16.04
-    container_name: all
+      - '${data}/zookeeper/data:/var/lib/zookeeper/data'
+      - '${data}/zookeeper/log:/var/lib/zookeeper/log'
+  kafka-broker:
+    image: confluentinc/cp-kafka:5.0.1
+    container_name: kafka-broker
+    restart: always
+    links:
+      - zookeeper
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-broker:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+    ports:
+      - 9092:9092
+    volumes:
+      - '${data}/kafka/data:/var/lib/kafka/data'
+  kafka-schema-registry:
+    image: confluentinc/cp-schema-registry:5.0.1
+    container_name: kafka-schema-registry
+    hostname: kafka-schema-registry
+    restart: always
+    links:
+      - zookeeper
+      - kafka-broker
+    ports:
+      - 8081:8081
+    environment:
+      - SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081
+      - SCHEMA_REGISTRY_HOST_NAME=kafka-schema-registry
+      - SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL=zookeeper:2181
+  kafka-rest-proxy:
+    image: confluentinc/cp-kafka-rest:5.0.1
+    container_name: kafka-rest-proxy
+    hostname: kafka-rest-proxy
+    restart: always
+    links:
+      - zookeeper
+      - kafka-broker
+      - kafka-schema-registry
+    ports:
+      - 8082:8082
+    environment:
+      - KAFKA_REST_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_REST_LISTENERS=http://0.0.0.0:8082
+      - KAFKA_REST_SCHEMA_REGISTRY_URL=http://kafka-schema-registry:8081
+      - KAFKA_REST_HOST_NAME=kafka-rest-proxy
+  ksql-server:
+    image: confluentinc/cp-ksql-server:5.0.1
+    container_name: ksql-server
+    hostname: ksql-server
+    restart: always
+    links:
+      - zookeeper
+      - kafka-broker
+      - kafka-schema-registry
+    ports:
+      - 8088:8088
+    environment:
+      - KSQL_HOST_NAME=ksql-server
+      - KSQL_CONFIG_DIR=/etc/ksql
+      - KSQL_LOG4J_OPTS=-Dlog4j.configuration=file:/etc/ksql/log4j-rolling.properties
+      - KSQL_BOOTSTRAP_SERVERS=kafka-broker:9092
+      - KSQL_LISTENERS=http://0.0.0.0:8088
+      - KSQL_CACHE_MAX_BYTES_BUFFERING=0
+      - KSQL_KSQL_SCHEMA_REGISTRY_URL=http://kafka-schema-registry:8081
+      - KSQL_PRODUCER_INTERCEPTOR_CLASSES=io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+      - KSQL_CONSUMER_INTERCEPTOR_CLASSES=io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+  kafka:
+    image: confluentinc/cp-ksql-cli:5.0.1
+    container_name: kafka
     restart: 'no'
     depends_on:
-      - dynamo
-      - mysql
-      - postgres
-      - nsqadmin
-      - elasticsearch
-      - cassandra
-      - redis
-      - consul
+      - zookeeper
+      - kafka-broker
+      - kafka-schema-registry
+      - kafka-rest-proxy
+      - ksql-server
+    entrypoint: echo kafka started.

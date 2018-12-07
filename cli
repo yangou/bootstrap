@@ -13,6 +13,11 @@
 	docker exec -it cassandra cqlsh cassandra
 }
 
+# kafka sql client
+.ksql(){
+	docker run -it --link ksql-server --net bootstrap_default --rm confluentinc/cp-ksql-cli:5.0.1 http://ksql-server:8088
+}
+
 # redis client
 .redis-cli(){
 	docker exec -it redis redis-cli -h redis
