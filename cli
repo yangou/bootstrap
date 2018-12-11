@@ -23,7 +23,14 @@
 	docker exec -it redis redis-cli -h redis
 }
 
-bootstrap(){
+.purge_data(){
+  cur_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  cd $cur_dir
+  rm -rf data
+  cd -
+}
+
+.bootstrap(){
 	cur_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 	cd $cur_dir
 	./bootstrap "$@"
